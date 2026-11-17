@@ -1,24 +1,40 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, StatusBar } from 'react-native';
+import {
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  Vibration,
+  View,
+} from 'react-native';
 
 export default function BackgroundChanger() {
-  // Default background color aur history store karne ke liye state
   const [bgColor, setBgColor] = useState('#1E293B');
   const [textColor, setTextColor] = useState('#FFFFFF');
 
+  const triggerVibration = () => {
+    if (Platform.OS !== 'web') {
+      Vibration.cancel(); // Purani vibration clear karein taaki har tap crisp rahe
+      Vibration.vibrate(60); // 60ms ka real-app jaisa tactile buzz
+    }
+  };
+
   // Random Hex Color generate karne ka function
   const generateRandomColor = () => {
-    const hexChars = '0123456789ABCDEF';
+    triggerVibration();
+    const hexRange = '0123456789ABCDEF';
     let color = '#';
     for (let i = 0; i < 6; i++) {
-      color += hexChars[Math.floor(Math.random() * 16)];
+      color += hexRange[Math.floor(Math.random() * 16)];
     }
     setBgColor(color);
     setTextColor('#FFFFFF');
   };
 
-  // Kuch preset sundar colors ke liye function
+  // Preset colors ke liye function (is par bhi vibration lagegi)
   const setPresetColor = (bg: string, text: string) => {
+    triggerVibration();
     setBgColor(bg);
     setTextColor(text);
   };
@@ -34,7 +50,11 @@ export default function BackgroundChanger() {
       </View>
 
       {/* Main Random Color Button */}
-      <TouchableOpacity style={styles.mainButton} onPress={generateRandomColor} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.mainButton}
+        onPress={generateRandomColor}
+        activeOpacity={0.8}
+      >
         <Text style={styles.mainButtonText}>🎨 Change Random Color</Text>
       </TouchableOpacity>
 
@@ -57,7 +77,10 @@ export default function BackgroundChanger() {
           onPress={() => setPresetColor('#F59E0B', '#111827')}
         />
         <TouchableOpacity
-          style={[styles.circle, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }]}
+          style={[
+            styles.circle,
+            { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' },
+          ]}
           onPress={() => setPresetColor('#F8FAFC', '#0F172A')}
         />
       </View>
