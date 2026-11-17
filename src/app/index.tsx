@@ -13,12 +13,18 @@ export default function BackgroundChanger() {
   const [bgColor, setBgColor] = useState('#1E293B');
   const [textColor, setTextColor] = useState('#FFFFFF');
 
-  const triggerVibration = () => {
-    if (Platform.OS !== 'web') {
-      Vibration.cancel(); // Purani vibration clear karein taaki har tap crisp rahe
-      Vibration.vibrate(60); // 60ms ka real-app jaisa tactile buzz
+ const triggerVibration = () => {
+  if (Platform.OS === 'web') {
+    // Phone ke Chrome browser par website kholne par vibrate karega
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(60);
     }
-  };
+  } else {
+    // Native Android / iOS app par vibrate karega
+    Vibration.cancel();
+    Vibration.vibrate(60);
+  }
+};
 
   // Random Hex Color generate karne ka function
   const generateRandomColor = () => {
