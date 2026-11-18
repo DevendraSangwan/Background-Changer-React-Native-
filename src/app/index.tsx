@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
+import React, { useRef, useState } from 'react';
 import {
+  Animated,
   Platform,
   StatusBar,
   StyleSheet,
@@ -11,49 +13,80 @@ import {
 
 export default function BackgroundChanger() {
   const [bgColor, setBgColor] = useState('#1E293B');
+  const [prevColor, setPrevColor] = useState('#1E293B');
   const [textColor, setTextColor] = useState('#FFFFFF');
+  const [copied, setCopied] = useState(false);
+  const [history, setHistory] = useState<string[]>(['#1E293B']);
 
- const triggerVibration = () => {
-  if (Platform.OS === 'web') {
-    // Phone ke Chrome browser par website kholne par vibrate karega
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      navigator.vibrate(60);
+  // Smooth transition ke liye animation value
+  const colorAnim = useRef(new Animated.Value(1)).current;
+
+  const triggerVibration = (duration = 60) => {
+    if (Platform.OS === 'web') {
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(duration);
+      }
+    } else {
+      Vibration.cancel();
+      Vibration.vibrate(duration);
     }
-  } else {
-    // Native Android / iOS app par vibrate karega
-    Vibration.cancel();
-    Vibration.vibrate(60);
-  }
-};
+  };
+
+  // Smooth fade ke saath color apply karne ka helper
+  const applyColorChange = (newColor: string, newTextColor = '#FFFFFF') => {
+    if (newColor === bgColor) return;
+    triggerVibration(60);
+    setPrevColor(bgColor);
+    setBgColor(newColor);
+    setTextColor(newTextColor);
+    setCopied(false);
+
+    // History mein latest 5 unique colors rakhein
+    setHistory((prev) => [newColor, ...prev.filter((c) => c !== newColor)].slice(0, 5));
+
+    colorAnim.setValue(0);
+    Animated.timing(colorAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  };
 
   // Random Hex Color generate karne ka function
   const generateRandomColor = () => {
-    triggerVibration();
     const hexRange = '0123456789ABCDEF';
     let color = '#';
     for (let i = 0; i < 6; i++) {
       color += hexRange[Math.floor(Math.random() * 16)];
     }
-    setBgColor(color);
-    setTextColor('#FFFFFF');
+    applyColorChange(color, '#FFFFFF');
   };
 
-  // Preset colors ke liye function (is par bhi vibration lagegi)
-  const setPresetColor = (bg: string, text: string) => {
-    triggerVibration();
-    setBgColor(bg);
-    setTextColor(text);
+  // Hex Code Clipboard par Copy karne ka function
+  const copyToClipboard = async () => {
+    await Clipboard.setStringAsync(bgColor);
+    triggerVibration(40);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
   };
+
+  const animatedBackground = colorAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [prevColor, bgColor],
+  });
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor }]}>
+    <Animated.View style={[styles.container, { backgroundColor: animatedBackground }]}>
       <StatusBar barStyle={textColor === '#FFFFFF' ? 'light-content' : 'dark-content'} />
 
-      {/* Current Color Code Card */}
-      <View style={styles.card}>
+      {/* Current Color Code Card (Tap to Copy) */}
+      <TouchableOpacity style={styles.card} onPress={copyToClipboard} activeOpacity={0.85}>
         <Text style={styles.label}>CURRENT BACKGROUND COLOR</Text>
         <Text style={styles.hexText}>{bgColor}</Text>
-      </View>
+        <Text style={[styles.copyHint, copied && styles.copiedText]}>
+          {copied ? '✓ Copied to clipboard!' : 'Tap card to copy HEX'}
+        </Text>
+      </TouchableOpacity>
 
       {/* Main Random Color Button */}
       <TouchableOpacity
@@ -65,32 +98,49 @@ export default function BackgroundChanger() {
       </TouchableOpacity>
 
       {/* Preset Color Circles */}
+      <Text style={styles.sectionTitle}>PRESET COLORS</Text>
       <View style={styles.presetRow}>
         <TouchableOpacity
           style={[styles.circle, { backgroundColor: '#EF4444' }]}
-          onPress={() => setPresetColor('#EF4444', '#FFFFFF')}
+          onPress={() => applyColorChange('#EF4444', '#FFFFFF')}
         />
         <TouchableOpacity
           style={[styles.circle, { backgroundColor: '#10B981' }]}
-          onPress={() => setPresetColor('#10B981', '#FFFFFF')}
+          onPress={() => applyColorChange('#10B981', '#FFFFFF')}
         />
         <TouchableOpacity
           style={[styles.circle, { backgroundColor: '#3B82F6' }]}
-          onPress={() => setPresetColor('#3B82F6', '#FFFFFF')}
+          onPress={() => applyColorChange('#3B82F6', '#FFFFFF')}
         />
         <TouchableOpacity
           style={[styles.circle, { backgroundColor: '#F59E0B' }]}
-          onPress={() => setPresetColor('#F59E0B', '#111827')}
+          onPress={() => applyColorChange('#F59E0B', '#111827')}
         />
         <TouchableOpacity
           style={[
             styles.circle,
             { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' },
           ]}
-          onPress={() => setPresetColor('#F8FAFC', '#0F172A')}
+          onPress={() => applyColorChange('#F8FAFC', '#0F172A')}
         />
       </View>
-    </View>
+
+      {/* Recent Color History */}
+      {history.length > 1 && (
+        <View style={styles.historyContainer}>
+          <Text style={styles.sectionTitle}>RECENT HISTORY</Text>
+          <View style={styles.presetRow}>
+            {history.map((itemColor) => (
+              <TouchableOpacity
+                key={itemColor}
+                style={[styles.historyCircle, { backgroundColor: itemColor }]}
+                onPress={() => applyColorChange(itemColor, '#FFFFFF')}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+    </Animated.View>
   );
 }
 
@@ -102,25 +152,34 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     paddingVertical: 24,
     paddingHorizontal: 36,
     borderRadius: 20,
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 36,
     elevation: 6,
   },
   label: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#64748B',
     letterSpacing: 1.2,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   hexText: {
     fontSize: 32,
     fontWeight: '800',
     color: '#0F172A',
+    marginBottom: 6,
+  },
+  copyHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  copiedText: {
+    color: '#10B981',
   },
   mainButton: {
     backgroundColor: '#0F172A',
@@ -135,6 +194,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    letterSpacing: 1,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
   presetRow: {
     flexDirection: 'row',
     gap: 14,
@@ -144,5 +215,17 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     elevation: 4,
+  },
+  historyContainer: {
+    marginTop: 28,
+    alignItems: 'center',
+  },
+  historyCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    elevation: 3,
   },
 });
